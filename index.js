@@ -1,16 +1,21 @@
 const { sleep } = require('sleep')
 const { Wechaty, Room, MediaMessage } = require('wechaty')
+const sgMail = require('@sendgrid/mail');
 
 function getEnv(k) {
     const key = `KEY_MESH_WECHAT_BOT_${k}`
     return process.env[key]
 }
+
 const ENV = {
     pushBearSendKey: getEnv('PUSH_BEAR_SEND_KEY'),
     tempPath: getEnv('TEMP_PATH'),
     backgroundPath: getEnv('BACKGROUND'),
+    sendgridApiKey: getEnv('SENDGRID_API_KEY'),
+    recipientEmails: JSON.parse(getEnv('RECIPIENT_EMAILS')),
 }
 console.log("ENV: ", ENV)
+sgMail.setApiKey(ENV.sendgridApiKey)
 
 const QRCode = require('qrcode'),
     images = require("images"),
@@ -23,6 +28,13 @@ const handleScan = async (url, code) => {
         require('qrcode-terminal').generate(loginUrl)
     }
 
+    const msg = {
+        to: ENV.recipientEmails,
+        from: 'hi@keymesh.io',
+        subject: 'Wechat bot login',
+        html: `<img src="${url}" />`,
+    };
+    sgMail.sendMultiple(msg);
     serverJiang('wechat bot scan', `![logo](${url})`)
     console.log(`${url}\n[${code}] Scan QR Code in above url to login: `)
 }
