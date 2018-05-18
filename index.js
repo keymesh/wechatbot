@@ -22,11 +22,23 @@ const QRCode = require('qrcode'),
     fs = require("fs"),
     stream = require("stream")
 
+const sentURLs = new Map()
+
 const handleScan = async (url, code) => {
     if (!/201|200/.test(String(code))) {
         const loginUrl = url.replace(/\/qrcode\//, '/l/')
         require('qrcode-terminal').generate(loginUrl)
     }
+
+    console.log(`${url}\n[${code}] Scan QR Code in above url to login: `)
+    if (sentURLs.has(url)) {
+      return
+    }
+
+    sentURLs.set(url, true)
+    setTimeout(() => {
+      sentURLs.delete(url)
+    }, 60 * 1000)
 
     const msg = {
         to: ENV.recipientEmails,
@@ -36,7 +48,6 @@ const handleScan = async (url, code) => {
     };
     sgMail.sendMultiple(msg);
     serverJiang('wechat bot scan', `![logo](${url})`)
-    console.log(`${url}\n[${code}] Scan QR Code in above url to login: `)
 }
 
 Wechaty.instance() // Singleton
