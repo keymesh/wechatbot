@@ -14,6 +14,7 @@ const ENV = {
     sendgridApiKey: getEnv('SENDGRID_API_KEY'),
     recipientEmails: JSON.parse(getEnv('RECIPIENT_EMAILS')),
 }
+
 console.log("ENV: ", ENV)
 sgMail.setApiKey(ENV.sendgridApiKey)
 
@@ -23,6 +24,25 @@ const QRCode = require('qrcode'),
     stream = require("stream")
 
 const sentURLs = new Map()
+
+const todoList = []
+async function doitnow() {
+    const func = todoList.pop()
+    if (func) {
+        await func()
+        setTimeout(doitnow, 5 * 1000)
+        return
+    }
+
+    setTimeout(doitnow, 100)
+}
+doitnow()
+
+function todoListMonitor() {
+    console.log(`todoList.length = ${todoList.length}`)
+    setTimeout(todoListMonitor, 60 * 1000)
+}
+todoListMonitor()
 
 const handleScan = async (url, code) => {
     if (!/201|200/.test(String(code))) {
@@ -55,51 +75,32 @@ Wechaty.instance() // Singleton
 .on('login',       user => console.log(`User ${user} logined`))
 .on('message',  async message => {
     console.log(`Message: ${message}`)
-    const content = message.content().trim()
-    if (/^saywelcometome$/.test(content)) {
-        await sendWelcome(message)
-        /*
-        const promoImgPath = await getPromoImgPath('bob')
-        await message.say(new MediaMessage(promoImgPath))
-        fs.unlinkSync(promoImgPath)
-        */
-    } else if (/^[0-9a-zA-Z]{15,}$/.test(content)) {
-        await sendPromoMessages(message, content)
+    if (!message.room()) {
+        const id = message.content().trim()
+        if (/^[0-9a-zA-Z]{15,}$/.test(id)) {
+            todoList.unshift(() => sendPromoMessages(message, id))
+        }
     }
 }).on('friend', async (friend, request) => {
     if (request) {
-        // query email
-        // const email = request.hello
         console.log(`Contact: ${friend.name()} send request ${request.hello}`)
-        /*
-        const id = await getMemberID(email)
-        if (id == '') {
-            console.log('you need sign up first')
-            return
-        }
-        */
 
-        await request.accept()
-        await sendWelcome(friend)
-        /*
-        let keymeshRoom = await Room.find({topic: /welcome/})
-        if (keymeshRoom) {
-            await keymeshRoom.add(friend)
-            console.log(`invited user to the group`)
-            await keymeshRoom.say("Welcome!", friend)
-        }
-        */
+        todoList.unshift(() => request.accept())
+        todoList.unshift(() => sendWelcome(friend))
     }
 })
 .start()
 
 async function getPromoImgPath(inviter) {
     const filePath = ENV.tempPath + "/" + generateRandomStr()
-    await QRCode.toFile(filePath, `https://airdrop.keymesh.io/i/${inviter}`)
+    await QRCode.toFile(filePath, `https://airdrop.keymesh.io/i/${inviter}`, {
+        scale: 7,
+        margin: 1,
+    })
 
     const promoImgPath = filePath + '.png'
     images(ENV.backgroundPath)
-        .draw(images(filePath), 10, 10)
+        .draw(images(filePath), 254, 543)
         .save(promoImgPath, {
             quality: 50,
         })
@@ -119,51 +120,41 @@ function generateRandomStr() {
     return text;
 }
 
-/*
-async function getMemberID(email) {
-    let id = ''
-    try {
-        const resp = await axios.get(process.env.GET_MEMBER_ID_URL, {
-            params: {
-                email,
-            }
-        })
-        id = resp.data.id
-    } finally {
-        return id
-    }
-}
-*/
-
 const welcomeMsg1 = `欢迎关注 KeyMesh 微信小助手`
 const welcomeMsg2 = `请将你的邀请码发给我，以生成您专属的邀请二维码`
 async function sendWelcome(sayer) {
-    sayer.say(welcomeMsg1)
-    sayer.say(welcomeMsg2)
+    todoList.unshift(() => sayer.say(welcomeMsg1))
+    todoList.unshift(() => sayer.say(welcomeMsg2))
 }
 
-const promoMsg1 = `感谢您关注 KeyMesh 第一期空投。KeyMesh 致力打造一个去中心化，安全的社交通讯平台。
+const promoMsg1 = `感谢您关注 KeyMesh 第一期空投，
+KeyMesh 致力打造一个去中心化安全的通讯平台。
 
-参与本空投的奖励规则如下:
+参与本空投的奖励规则如下：
+本期（第一期）参与者：
+注册领取 300 KMH，加入电报群获得 700 KMH，
+邀请注册奖励 2000 KMH，多邀多送
 
-blah blah blah
+KeyMesh 项目已进入 Beta 版，
+点击 https://keymesh.io/ 进行体验。
 
-为了方便扩散，您可以在朋友圈或者群里转发
-下面的图片：
-`
+官方社区QQ群：460796055
+
+公众号搜索: Keymesh
+关注项目最新进展及第二期空投信息。
+
+您可以在朋友圈发放专属邀请二维码获取更多奖励：`
+
 async function sendPromoMessages(sayer, id) {
-    await sayer.say(promoMsg1)
+    todoList.unshift(() => sayer.say(promoMsg1))
 
     // send promotional image
     const promoImgPath = await getPromoImgPath(id)
-    await sayer.say(new MediaMessage(promoImgPath))
-    fs.unlinkSync(promoImgPath)
-    sleep(2)
-
-    await sayer.say("邀请你加入 KeyMesh 空投电报群")
-    await sayer.say("https://t.me/keymesh_airdrop")
+    todoList.unshift(async () => {
+        await sayer.say(new MediaMessage(promoImgPath))
+        fs.unlinkSync(promoImgPath)
+    })
 }
-
 
 function serverJiang(username, content) {
     const request = require('request')
