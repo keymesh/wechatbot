@@ -30,7 +30,7 @@ async function doitnow() {
     const func = todoList.pop()
     if (func) {
         await func()
-        setTimeout(doitnow, 5 * 1000)
+        setTimeout(doitnow, 1000)
         return
     }
 
